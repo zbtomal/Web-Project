@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Donor Dashboard - Blood Donation Management</title>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Roboto', Arial, sans-serif; background:#f6f7fb; margin:0; padding:2rem; }
+    .wrap { max-width:1100px; margin:0 auto; }
+    h1 { color:#b71c1c; margin-bottom:1rem; }
+    .top-row { display:flex; justify-content:space-between; align-items:center; gap:1rem; margin-bottom:1rem; }
+    input[type=search] { padding:0.5rem; border-radius:6px; border:1px solid #ccc; width:300px; }
+    table { width:100%; border-collapse:collapse; background:#fff; border-radius:8px; overflow:hidden; box-shadow:0 4px 20px rgba(0,0,0,0.06); }
+    th, td { padding:0.75rem 0.8rem; border-bottom:1px solid #f0f0f0; text-align:left; font-size:0.95rem; }
+    th { background:#b71c1c; color:#fff; font-weight:700; }
+    tr:nth-child(even) td { background:#fafafa; }
+    .actions button { margin-right:0.4rem; border: none; padding:0.4rem 0.6rem; border-radius:6px; cursor:pointer; font-weight:600; }
+    .btn-toggle { background:#1976d2; color:#fff; }
+    .btn-record { background:#388e3c; color:#fff; }
+    .btn-edit { background:#ffb300; color:#000; }
+    .btn-delete { background:#e53935; color:#fff; }
+    .small { font-size:0.85rem; color:#555; }
+    .card-edit { background:#fff; padding:1rem; margin-top:1rem; border-radius:8px; box-shadow:0 2px 10px rgba(0,0,0,0.04); }
+    label { display:block; font-weight:600; margin-top:0.6rem; }
+    input[type=text], input[type=email], input[type=tel], select { width:100%; padding:0.45rem; border-radius:6px; border:1px solid #ddd; }
+    .row-helpers { display:flex; gap:0.5rem; align-items:center; }
+    .muted { color:#666; font-size:0.9rem; }
+    .top-links a { color:#b71c1c; text-decoration:none; font-weight:700; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="top-row">
+      <div>
+        <h1>Donor Dashboard</h1>
+        <div class="muted">Manage donor availability, last donation date, donation counts and details.</div>
+      </div>
+      <div class="top-links">
+        <a href="index.html">+ Register donor</a>
+        <span style="margin-left:12px;"></span>
+        <a href="donors.html">View donors</a>
+      </div>
+    </div>
+
+    <div style="margin-bottom:0.75rem; display:flex; justify-content:space-between; gap:1rem; align-items:center;">
+      <input id="searchInput" type="search" placeholder="Filter by name, email or blood group" oninput="filterTable()">
+      <div class="row-helpers">
+        <label style="margin:0 0.5rem 0 0; font-weight:600;">Refresh</label>
+        <button id="refreshBtn" style="padding:0.45rem 0.75rem; border-radius:6px; border:none; background:#1976d2; color:#fff; cursor:pointer;">Reload</button>
+      </div>
+    </div>
+
+    <table id="donorTable">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Email</th>
+          <th>Phone</th>
+          <th>Blood Group</th>
+          <th>Available</th>
+          <th>Last Donation</th>
+          <th>Donation Count</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td colspan="8" class="small">Loading donors...</td></tr>
+      </tbody>
+    </table>
+
+    <div id="editArea"></div>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+    import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+    import { getFirestore, collection, getDocs, doc, updateDoc, deleteDoc, query, where } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyC_-abGxtDSaPEZHgFFRqL98CAsVmSMjmw",
+      authDomain: "blood-donation-system-21c24.firebaseapp.com",
+      projectId: "blood-donation-system-21c24",
+      storageBucket: "blood-donation-system-21c24.firebasestorage.app",
+      messagingSenderId: "236781015251",
+      appId: "1:236781015251:web:b6458c618cb56379a54426",
+      measurementId: "G-M38VV9TMPW"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const auth = getAuth(app);
+
+    let donorsCache = []; // { id, data }
+
+    const tbody = document.querySelector('#donorTable tbody');
+    const editArea = document.getElementById('editArea');
+
+    function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"})[c] ); }
+
+    function formatDate(iso) {
+      if (!iso) return '-';
+      try {
+        const dt = new Date(iso);
+        return dt.toLocaleDateString();
+      } catch { return iso; }
+    }
+
+    async function loadUserDonor() {
+      tbody.innerHTML = '<tr><td colspan="8" class="small">Loading your info...</td></tr>';
+      donorsCache = [];
+      const user = auth.currentUser;
+      if (!user) {
+        tbody.innerHTML = '<tr><td colspan="8" class="small">Not logged in.</td></tr>';
+        return;
+      }
+      try {
+        const q = query(collection(db, 'donors'), where('email', '==', user.email));
+        const snapshot = await getDocs(q);
+        if (snapshot.empty) {
+          tbody.innerHTML = '<tr><td colspan="8" class="small">No donor info found for your account.</td></tr>';
+          return;
+        }
+        snapshot.forEach(d => donorsCache.push({ id: d.id, data: d.data() }));
+        renderTable(donorsCache);
+      } catch (err) {
+        tbody.innerHTML = '<tr><td colspan="8" class="small">Error loading info: ' + err.message + '</td></tr>';
+      }
+    }
+
+    function renderTable(list) {
+      if (!list.length) {
+        tbody.innerHTML = '<tr><td colspan="8" class="small">No donor info found.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = '';
+      list.forEach(item => {
+        const d = item.data || {};
+        const tr = document.createElement('tr');
+        tr.dataset.id = item.id;
+        tr.innerHTML = `
+          <td>${escapeHtml(d.name || '')}</td>
+          <td>${escapeHtml(d.email || '')}</td>
+          <td>${escapeHtml(d.phone || '')}</td>
+          <td>${escapeHtml(d.bloodGroup || '')}</td>
+          <td>${d.available ? 'Yes' : 'No'}</td>
+          <td>${formatDate(d.lastDonation)}</td>
+          <td>${d.donationCount || 0}</td>
+          <td class="actions">
+            <button class="btn-toggle" data-id="${item.id}">${d.available ? 'Set Unavailable' : 'Set Available'}</button>
+            <button class="btn-record" data-id="${item.id}">Record Donation</button>
+            <button class="btn-edit" data-id="${item.id}">Edit</button>
+            <button class="btn-delete" data-id="${item.id}">Delete</button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      // attach handlers
+      document.querySelectorAll('.btn-toggle').forEach(b => b.onclick = handleToggle);
+      document.querySelectorAll('.btn-record').forEach(b => b.onclick = handleRecord);
+      document.querySelectorAll('.btn-edit').forEach(b => b.onclick = handleEdit);
+      document.querySelectorAll('.btn-delete').forEach(b => b.onclick = handleDelete);
+    }
+
+    async function handleToggle(e) {
+      const id = e.currentTarget.dataset.id;
+      const item = donorsCache.find(x => x.id === id);
+      if (!item) return;
+      const newVal = !item.data.available;
+      try {
+        await updateDoc(doc(db, 'donors', id), { available: newVal });
+        item.data.available = newVal;
+        renderTable(donorsCache);
+      } catch (err) {
+        alert('Failed to update availability: ' + err.message);
+      }
+    }
+
+    async function handleRecord(e) {
+      const id = e.currentTarget.dataset.id;
+      const item = donorsCache.find(x => x.id === id);
+      if (!item) return;
+      const nowIso = new Date().toISOString();
+      const newCount = (item.data.donationCount || 0) + 1;
+      try {
+        await updateDoc(doc(db, 'donors', id), { lastDonation: nowIso, donationCount: newCount, available: false });
+        item.data.lastDonation = nowIso;
+        item.data.donationCount = newCount;
+        item.data.available = false;
+        renderTable(donorsCache);
+      } catch (err) {
+        alert('Failed to record donation: ' + err.message);
+      }
+    }
+
+    function handleEdit(e) {
+      const id = e.currentTarget.dataset.id;
+      const item = donorsCache.find(x => x.id === id);
+      if (!item) return;
+      const d = item.data;
+      editArea.innerHTML = `
+        <div class="card-edit">
+          <h3>Edit donor</h3>
+          <label>Name</label>
+          <input id="edit_name" type="text" value="${escapeHtml(d.name || '')}">
+          <label>Email</label>
+          <input id="edit_email" type="email" value="${escapeHtml(d.email || '')}">
+          <label>Phone</label>
+          <input id="edit_phone" type="tel" value="${escapeHtml(d.phone || '')}">
+          <label>Address</label>
+          <input id="edit_address" type="text" value="${escapeHtml(d.address || '')}">
+          <label>Blood Group</label>
+          <select id="edit_bloodGroup">
+            <option value="">Select</option>
+            <option value="A+">A+</option>
+            <option value="A-">A-</option>
+            <option value="B+">B+</option>
+            <option value="B-">B-</option>
+            <option value="AB+">AB+</option>
+            <option value="AB-">AB-</option>
+            <option value="O+">O+</option>
+            <option value="O-">O-</option>
+          </select>
+          <div style="margin-top:0.75rem;">
+            <button id="saveEdit" style="background:#388e3c; color:#fff; border:none; padding:0.5rem 0.8rem; border-radius:6px; font-weight:700;">Save</button>
+            <button id="cancelEdit" style="background:#e0e0e0; color:#000; border:none; padding:0.5rem 0.8rem; border-radius:6px; margin-left:0.5rem;">Cancel</button>
+          </div>
+        </div>
+      `;
+      // set select value after insert
+      document.getElementById('edit_bloodGroup').value = d.bloodGroup || '';
+      document.getElementById('saveEdit').onclick = async () => {
+        const updated = {
+          name: document.getElementById('edit_name').value.trim(),
+          email: document.getElementById('edit_email').value.trim(),
+          phone: document.getElementById('edit_phone').value.trim(),
+          address: document.getElementById('edit_address').value.trim(),
+          bloodGroup: document.getElementById('edit_bloodGroup').value
+        };
+        try {
+          await updateDoc(doc(db, 'donors', id), updated);
+          Object.assign(item.data, updated);
+          renderTable(donorsCache);
+          editArea.innerHTML = '';
+        } catch (err) {
+          alert('Failed to save: ' + err.message);
+        }
+      };
+      document.getElementById('cancelEdit').onclick = () => editArea.innerHTML = '';
+      // scroll to edit area
+      editArea.scrollIntoView({ behavior: 'smooth' });
+    }
+
+    async function handleDelete(e) {
+      const id = e.currentTarget.dataset.id;
+      if (!confirm('Delete this donor? This cannot be undone.')) return;
+      try {
+        await deleteDoc(doc(db, 'donors', id));
+        donorsCache = donorsCache.filter(x => x.id !== id);
+        renderTable(donorsCache);
+      } catch (err) {
+        alert('Failed to delete: ' + err.message);
+      }
+    }
+
+    // simple client-side filter
+    function filterTable() {
+      const q = document.getElementById('searchInput').value.trim().toLowerCase();
+      if (!q) return renderTable(donorsCache);
+      const filtered = donorsCache.filter(item => {
+        const d = item.data || {};
+        return (d.name||'').toLowerCase().includes(q) || (d.email||'').toLowerCase().includes(q) || (d.bloodGroup||'').toLowerCase().includes(q);
+      });
+      renderTable(filtered);
+    }
+
+    document.getElementById('refreshBtn').addEventListener('click', loadUserDonor);
+
+    // initial load: wait for auth
+    onAuthStateChanged(auth, user => {
+      if (user) loadUserDonor();
+      else tbody.innerHTML = '<tr><td colspan="8" class="small">Please login to view your donor info.</td></tr>';
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Blood Donation — Home</title>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--red:#d32f2f;--accent:#1976d2}
+    body{font-family:Roboto,Arial,sans-serif;margin:0;color:#222;background:#f4f6f8}
+    header{background:#fff;border-bottom:1px solid #eee}
+    .wrap{max-width:1100px;margin:0 auto;padding:0 1rem}
+    .nav{display:flex;align-items:center;justify-content:space-between;padding:1rem 0}
+    .nav a{color:var(--red);text-decoration:none;font-weight:700;margin-left:1rem}
+    .hero{background:linear-gradient(90deg, rgba(211,47,47,0.06), rgba(25,118,210,0.04));padding:3rem 0}
+    .hero-inner{display:flex;gap:2rem;align-items:center}
+    .hero h1{margin:0;color:var(--red)}
+    .hero p{margin:.5rem 0;color:#444}
+    .card{background:#fff;padding:1rem;border-radius:10px;box-shadow:0 6px 24px rgba(12,40,80,0.06)}
+    .search{display:flex;gap:.5rem;flex-wrap:wrap}
+    select,input[type=text]{padding:.6rem;border-radius:8px;border:1px solid #ddd}
+    button.primary{background:var(--accent);color:#fff;border:none;padding:.6rem 1rem;border-radius:8px;cursor:pointer;font-weight:700}
+    .results{margin-top:1rem;display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:1rem}
+    .donor{background:#fff;padding:0.8rem;border-radius:8px;border:1px solid #eee}
+    .donor h4{margin:.2rem 0;color:#b71c1c}
+    .donor .meta{font-size:.9rem;color:#555}
+    .donor button{margin-top:.6rem;background:#388e3c;color:#fff;border:none;padding:.45rem .6rem;border-radius:6px;cursor:pointer}
+    footer{margin-top:2rem;padding:1rem 0;text-align:center;color:#666}
+    .top-right-dashboard{position:fixed;top:16px;right:16px;z-index:200}
+    @media(max-width:720px){ .hero-inner{flex-direction:column;align-items:flex-start} }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap nav">
+      <div class="brand">
+        <strong style="color:var(--red)">Blood Donation</strong>
+        <span style="margin-left:.6rem;color:#666">Community</span>
+      </div>
+      <nav>
+        <a href="help.html">Help</a>
+        <a id="authLink" href="login.html">Login</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="hero">
+      <div class="hero-inner wrap">
+        <div style="flex:1">
+          <h1>Find a blood donor near you</h1>
+          <p>Search donors by blood group and area. Contact or request donation securely.</p>
+        </div>
+        <div style="width:420px">
+          <div class="card">
+            <form id="searchForm" class="search" onsubmit="return false">
+              <select id="qGroup" required>
+                <option value="">Select blood group</option>
+                <option>A+</option><option>A-</option><option>B+</option><option>B-</option>
+                <option>AB+</option><option>AB-</option><option>O+</option><option>O-</option>
+              </select>
+              <input id="qArea" type="text" placeholder="Area (optional)" />
+              <button id="doSearch" class="primary" type="button">Search</button>
+            </form>
+            <div id="searchMsg" style="margin-top:.6rem;color:#666;font-size:.95rem"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section style="margin-top:1rem">
+      <h3>Results</h3>
+      <div id="results" class="results">
+        <!-- donors here -->
+      </div>
+    </section>
+
+    <footer>
+      <div class="wrap">&copy; 2025 Blood Donation Community — <a href="help.html">Help</a></div>
+    </footer>
+  </main>
+
+  <!-- Firebase + app logic -->
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+    import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+    import { getFirestore, collection, getDocs } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyC_-abGxtDSaPEZHgFFRqL98CAsVmSMjmw",
+      authDomain: "blood-donation-system-21c24.firebaseapp.com",
+      projectId: "blood-donation-system-21c24",
+      storageBucket: "blood-donation-system-21c24.firebasestorage.app",
+      messagingSenderId: "236781015251",
+      appId: "1:236781015251:web:b6458c618cb56379a54426",
+      measurementId: "G-M38VV9TMPW"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    // update nav link depending on auth state
+    const authLink = document.getElementById('authLink');
+    onAuthStateChanged(auth, user => {
+      if (user) {
+        authLink.textContent = 'Dashboard';
+        authLink.href = 'dashboard.html';
+      } else {
+        authLink.textContent = 'Login';
+        authLink.href = 'login.html';
+      }
+    });
+
+    // search
+    const doSearch = document.getElementById('doSearch');
+    const resultsEl = document.getElementById('results');
+    const searchMsg = document.getElementById('searchMsg');
+
+    doSearch.addEventListener('click', async () => {
+      const group = document.getElementById('qGroup').value;
+      const area = document.getElementById('qArea').value.trim().toLowerCase();
+      if (!group) { searchMsg.textContent = 'Choose a blood group.'; return; }
+      searchMsg.textContent = 'Searching...';
+      resultsEl.innerHTML = '';
+      try {
+        const snap = await getDocs(collection(db, 'donors'));
+        const donors = [];
+        snap.forEach(d => {
+          const data = d.data();
+          if ((data.bloodGroup || '').toLowerCase() === group.toLowerCase() && data.available === true) {
+            if (!area || (data.address||'').toLowerCase().includes(area)) donors.push({ id: d.id, ...data });
+          }
+        });
+        if (!donors.length) {
+          searchMsg.textContent = 'No available donors found.';
+          return;
+        }
+        searchMsg.textContent = donors.length + ' available donor(s) found.';
+        donors.forEach(d => {
+          const card = document.createElement('div');
+          card.className = 'donor card';
+          card.innerHTML = `<h4>${escapeHtml(d.name||'')}</h4><div class="meta">${escapeHtml(d.email||'')} • ${escapeHtml(d.phone||'')}</div><div class="meta">${escapeHtml(d.address||'')} • ${escapeHtml(d.bloodGroup||'')}</div>`;
+          if (d.lastDonation) card.innerHTML += `<div class="meta">Last donation: ${new Date(d.lastDonation).toLocaleDateString()}</div>`;
+          const btn = document.createElement('button');
+          btn.textContent = 'Request Donation';
+          btn.onclick = async () => {
+            const user = auth.currentUser;
+            if (!user) return alert('Please login to request a donation.');
+            // create a request doc
+            try {
+              await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js').then(mod => {
+                const { getFirestore, collection, addDoc } = mod;
+                const db2 = getFirestore(app);
+                return addDoc(collection(db2, 'requests'), { donorId: d.id, requesterUid: user.uid, status: 'pending', createdAt: new Date().toISOString() });
+              });
+              alert('Request sent. Donor will be notified (if enabled).');
+            } catch (err) { alert('Failed to send request: ' + err.message); }
+          };
+          card.appendChild(btn);
+          resultsEl.appendChild(card);
+        });
+      } catch (err) {
+        searchMsg.textContent = 'Search failed: ' + err.message;
+      }
+    });
+
+    function escapeHtml(s){ return String(s||'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"})[c]); }
+
+  </script>
+</body>
+</html>
