@@ -363,6 +363,7 @@
       </nav>
     </div>
   </header>
+
   <main class="wrap">
     <section class="hero">
       <div class="hero-inner">
@@ -382,6 +383,7 @@
             </div>
           </div>
         </div>
+
         <div class="hero-form">
           <h3>Find Donors</h3>
           <p>Search for blood donors in your area</p>
@@ -392,14 +394,17 @@
               <option>A+</option><option>A-</option><option>B+</option><option>B-</option>
               <option>AB+</option><option>AB-</option><option>O+</option><option>O-</option>
             </select>
+
             <label for="qArea" style="font-weight:600;margin-bottom:.2rem;">Area (Optional)</label>
             <input id="qArea" type="text" placeholder="e.g. Downtown, Brooklyn" />
+
             <button id="doSearch" class="primary" type="button">Search Donors</button>
           </form>
           <div id="searchMsg"></div>
         </div>
       </div>
     </section>
+
     <section class="results-section">
       <h3>Results</h3>
       <div id="results" class="results">
@@ -407,6 +412,7 @@
       </div>
     </section>
   </main>
+
   <footer>
     <div class="footer-main">
       <div class="footer-col">
@@ -446,10 +452,12 @@
     </div>
     <div class="footer-bottom">© 2025 Blood Donation Community. All rights reserved.</div>
   </footer>
+
   <script type="module">
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
     import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
     import { getFirestore, collection, getDocs } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+
     const firebaseConfig = {
       apiKey: "AIzaSyC_-abGxtDSaPEZHgFFRqL98CAsVmSMjmw",
       authDomain: "blood-donation-system-21c24.firebaseapp.com",
@@ -459,9 +467,11 @@
       appId: "1:236781015251:web:b6458c618cb56379a54426",
       measurementId: "G-M38VV9TMPW"
     };
+
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
     const db = getFirestore(app);
+
     // update nav link depending on auth state
     const authLink = document.getElementById('authLink');
     onAuthStateChanged(auth, user => {
@@ -473,50 +483,72 @@
         authLink.href = 'login.html';
       }
     });
+
     // search
     const doSearch = document.getElementById('doSearch');
     const resultsEl = document.getElementById('results');
     const searchMsg = document.getElementById('searchMsg');
+
     doSearch.addEventListener('click', async () => {
       const group = document.getElementById('qGroup').value;
       const area = document.getElementById('qArea').value.trim().toLowerCase();
       if (!group) { searchMsg.textContent = 'Choose a blood group.'; return; }
+
       searchMsg.textContent = 'Searching...';
       resultsEl.innerHTML = '';
+
       try {
         const snap = await getDocs(collection(db, 'donors'));
         const donors = [];
         snap.forEach(d => {
           const data = d.data();
           if ((data.bloodGroup || '').toLowerCase() === group.toLowerCase() && data.available === true) {
-            if (!area || (data.address||'').toLowerCase().includes(area)) donors.push({ id: d.id, ...data });
+            if (!area || (data.address || '').toLowerCase().includes(area)) {
+              donors.push({ id: d.id, ...data });
+            }
           }
         });
+
         if (!donors.length) {
           searchMsg.textContent = 'No available donors found.';
           return;
         }
+
         searchMsg.textContent = donors.length + ' available donor(s) found.';
         donors.forEach(d => {
           const card = document.createElement('div');
           card.className = 'donor card';
-          card.innerHTML = `<h4>${escapeHtml(d.name||'')}</h4><div class="meta">${escapeHtml(d.email||'')} • ${escapeHtml(d.phone||'')}</div><div class="meta">${escapeHtml(d.address||'')} • ${escapeHtml(d.bloodGroup||'')}</div>`;
-          if (d.lastDonation) card.innerHTML += `<div class="meta">Last donation: ${new Date(d.lastDonation).toLocaleDateString()}</div>`;
+          card.innerHTML = `
+            <h4>${escapeHtml(d.name || '')}</h4>
+            <div class="meta">${escapeHtml(d.email || '')} • ${escapeHtml(d.phone || '')}</div>
+            <div class="meta">${escapeHtml(d.address || '')} • ${escapeHtml(d.bloodGroup || '')}</div>
+          `;
+          if (d.lastDonation) {
+            card.innerHTML += `<div class="meta">Last donation: ${new Date(d.lastDonation).toLocaleDateString()}</div>`;
+          }
+
           const btn = document.createElement('button');
           btn.textContent = 'Request Donation';
           btn.onclick = async () => {
             const user = auth.currentUser;
             if (!user) return alert('Please login to request a donation.');
-            // create a request doc
             try {
               await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js').then(mod => {
                 const { getFirestore, collection, addDoc } = mod;
                 const db2 = getFirestore(app);
-                return addDoc(collection(db2, 'requests'), { donorId: d.id, requesterUid: user.uid, status: 'pending', createdAt: new Date().toISOString() });
+                return addDoc(collection(db2, 'requests'), {
+                  donorId: d.id,
+                  requesterUid: user.uid,
+                  status: 'pending',
+                  createdAt: new Date().toISOString()
+                });
               });
               alert('Request sent. Donor will be notified (if enabled).');
-            } catch (err) { alert('Failed to send request: ' + err.message); }
+            } catch (err) {
+              alert('Failed to send request: ' + err.message);
+            }
           };
+
           card.appendChild(btn);
           resultsEl.appendChild(card);
         });
@@ -524,644 +556,12 @@
         searchMsg.textContent = 'Search failed: ' + err.message;
       }
     });
-    function escapeHtml(s){ return String(s||'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'})[c]); }
+
+    function escapeHtml(s) {
+      return String(s || '').replace(/[&<>"']/g, c => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+      })[c]);
+    }
   </script>
 </body>
-</html>
-    :root {
-      <style>
-      color: var(--red);
-      text-decoration: none;
-      font-weight: 700;
-      margin-left: 1.2rem;
-      border: 1.5px solid var(--red);
-      border-radius: 6px;
-      padding: 0.3rem 1.1rem;
-      background: #fff;
-      transition: background .15s, color .15s;
-    }
-    nav a:first-child {
-      border: none;
-      color: #444;
-      background: none;
-      font-weight: 500;
-      margin-left: 0;
-    }
-    nav a:hover {
-      background: var(--red);
-      color: #fff;
-    }
-    .hero {
-      background: linear-gradient(90deg, rgba(211,47,47,0.06), rgba(25,118,210,0.04));
-      padding: 3.5rem 0 2.5rem 0;
-    }
-    .hero-inner {
-      display: flex;
-      gap: 2.5rem;
-      align-items: center;
-      justify-content: space-between;
-    }
-    .hero-content {
-      flex: 1.2;
-    }
-    .hero-content h1 {
-      margin: 0 0 1.1rem 0;
-      font-size: 2.7rem;
-      font-weight: 700;
-      color: #222;
-      line-height: 1.15;
-    }
-    .hero-content h1 .highlight {
-      color: var(--red);
-    }
-    .hero-content p {
-      margin: 0 0 2.2rem 0;
-      color: #444;
-      font-size: 1.18rem;
-      max-width: 520px;
-    }
-    .hero-stats {
-      display: flex;
-      gap: 2.5rem;
-      margin-top: 2.2rem;
-
-    <main class="wrap">
-      <section class="hero">
-        <div class="hero-inner">
-          <div class="hero-content">
-            <h1>Find a blood donor <span class="highlight">near you</span></h1>
-            <p>Connect with verified blood donors in your area. Search by blood group and location to find the help you need, when you need it most.</p>
-            <div class="hero-stats">
-              <div class="stat">
-                <span class="stat-icon">💧</span>
-                <span class="stat-label">500+</span>
-                <span class="stat-desc">Active Donors</span>
-              </div>
-              <div class="stat">
-                <span class="stat-icon">📍</span>
-                <span class="stat-label">50+</span>
-                <span class="stat-desc">Cities Covered</span>
-              </div>
-            </div>
-          </div>
-          <div class="hero-form">
-            <h3>Find Donors</h3>
-            <form id="searchForm" class="search" onsubmit="return false">
-              <label for="qGroup" style="font-weight:600;margin-bottom:.2rem;">Blood Group *</label>
-              <select id="qGroup" required>
-                <option value="">Select blood group</option>
-                <option>A+</option><option>A-</option><option>B+</option><option>B-</option>
-                <option>AB+</option><option>AB-</option><option>O+</option><option>O-</option>
-              </select>
-              <label for="qArea" style="font-weight:600;margin-bottom:.2rem;">Area (Optional)</label>
-              <input id="qArea" type="text" placeholder="e.g. Downtown, Brooklyn" />
-              <button id="doSearch" class="primary" type="button">Search Donors</button>
-            </form>
-            <div id="searchMsg"></div>
-          </div>
-        </div>
-      </section>
-      <section class="results-section">
-        <h3>Results</h3>
-        <div id="results" class="results">
-          <!-- donors here -->
-        </div>
-      </section>
-    </main>
-    <footer>
-      <div class="footer-main">
-        <div class="footer-col">
-          <div class="footer-brand">
-            <span class="footer-brand-icon">❤️</span>
-            <span class="footer-brand-title">Blood Donation</span>
-            <span style="color:#b0b6c3;margin-left:.5rem;">Community</span>
-          </div>
-          <div class="footer-brand-desc">
-            Connecting blood donors with those in need. Together, we save lives one donation at a time.
-          </div>
-        </div>
-        <div class="footer-col">
-          <h4>Quick Links</h4>
-          <ul>
-            <li><a href="#">Find Donors</a></li>
-            <li><a href="#">Become a Donor</a></li>
-            <li><a href="#">Blood Drive Events</a></li>
-            <li><a href="#">About Us</a></li>
-          </ul>
-        </div>
-        <div class="footer-col">
-          <h4>Support</h4>
-          <ul>
-            <li><a href="#">Help Center</a></li>
-            <li><a href="#">Safety Guidelines</a></li>
-            <li><a href="#">Privacy Policy</a></li>
-            <li><a href="#">Terms of Service</a></li>
-          </ul>
-        </div>
-        <div class="footer-col">
-          <h4>Contact Us</h4>
-          <div class="footer-contact"><span class="icon">📞</span>+1 (555) 123-4567</div>
-          <div class="footer-contact"><span class="icon">✉️</span>help@blooddonation.org</div>
-          <div class="footer-contact"><span class="icon">📍</span>New York, NY</div>
-        </div>
-      </div>
-      <div class="footer-bottom">© 2025 Blood Donation Community. All rights reserved.</div>
-    </footer>
-      font-size: 1.05rem;
-    }
-    .footer-main {
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: space-between;
-      align-items: flex-start;
-      gap: 2.5rem;
-      max-width: 1200px;
-      margin: 0 auto 1.2rem auto;
-      padding: 0 1.5rem;
-    }
-    .footer-col {
-      min-width: 180px;
-      flex: 1;
-    }
-    .footer-col h4 {
-      color: #fff;
-      font-size: 1.1rem;
-      font-weight: 700;
-      margin-bottom: .7rem;
-    }
-    .footer-col ul {
-      list-style: none;
-      padding: 0;
-      margin: 0;
-    }
-    .footer-col ul li {
-      margin-bottom: .5rem;
-    }
-    .footer-col ul li a {
-      color: var(--footer-link);
-      text-decoration: none;
-      font-weight: 500;
-      transition: color .15s;
-    }
-    .footer-col ul li a:hover {
-      color: var(--red);
-    }
-    .footer-brand {
-      display: flex;
-      align-items: flex-start;
-      gap: .7rem;
-      margin-bottom: .7rem;
-    }
-    .footer-brand-icon {
-      font-size: 1.7rem;
-      color: var(--red);
-      margin-right: .2rem;
-    }
-    .footer-brand-title {
-      font-weight: 700;
-      color: var(--red);
-      font-size: 1.1rem;
-    }
-    .footer-brand-desc {
-      color: var(--footer-muted);
-      font-size: .98rem;
-      margin-bottom: .7rem;
-    }
-    .footer-contact {
-      color: var(--footer-link);
-      font-size: 1.01rem;
-    }
-    .footer-contact .icon {
-      margin-right: .5rem;
-      color: var(--accent);
-      font-size: 1.1rem;
-    }
-    .footer-bottom {
-      text-align: center;
-      color: var(--footer-muted);
-      font-size: .98rem;
-      margin-top: 1.2rem;
-    }
-    @media (max-width: 900px) {
-      .hero-inner {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 2.5rem;
-      }
-      .hero-form {
-        width: 100%;
-        min-width: 0;
-        margin-top: 2.5rem;
-      }
-      .footer-main {
-        flex-direction: column;
-        gap: 2rem;
-      }
-    }
-    @media (max-width: 600px) {
-      .wrap {
-        padding: 0 .7rem;
-      }
-      .hero-content h1 {
-        font-size: 2rem;
-      }
-      .hero-form {
-        padding: 1.2rem .7rem 1.2rem .7rem;
-      }
-      .footer-main {
-        padding: 0 .7rem;
-      }
-    }
-  </style>
-
-
-  <main class="wrap">
-
-
-    <section class="hero">
-
-
-      <div class="hero-inner wrap">
-
-
-        <div style="flex:1">
-
-
-          <h1>Find a blood donor near you</h1>
-
-
-          <p>Search donors by blood group and area. Contact or request donation securely.</p>
-
-
-        </div>
-
-
-        <div style="width:420px">
-
-
-          <div class="card">
-
-
-            <form id="searchForm" class="search" onsubmit="return false">
-
-
-              <select id="qGroup" required>
-
-
-                <option value="">Select blood group</option>
-
-
-                <option>A+</option><option>A-</option><option>B+</option><option>B-</option>
-
-
-                <option>AB+</option><option>AB-</option><option>O+</option><option>O-</option>
-
-
-              </select>
-
-
-              <input id="qArea" type="text" placeholder="Area (optional)" />
-
-
-              <button id="doSearch" class="primary" type="button">Search</button>
-
-
-            </form>
-
-
-            <div id="searchMsg" style="margin-top:.6rem;color:#666;font-size:.95rem"></div>
-
-
-          </div>
-
-
-        </div>
-
-
-      </div>
-
-
-    </section>
-
-
-
-
-
-
-    <main class="wrap">
-      <section class="hero">
-        <div class="hero-inner">
-          <div class="hero-content">
-            <h1>Find a blood donor <span class="highlight">near you</span></h1>
-            <p>Connect with verified blood donors in your area. Search by blood group and location to find the help you need, when you need it most.</p>
-            <div class="hero-stats">
-              <div class="stat">
-                <span class="stat-icon">💧</span>
-                <span class="stat-label">500+</span>
-                <span class="stat-desc">Active Donors</span>
-              </div>
-              <div class="stat">
-                <span class="stat-icon">📍</span>
-                <span class="stat-label">50+</span>
-                <span class="stat-desc">Cities Covered</span>
-              </div>
-            </div>
-          </div>
-          <div class="hero-form">
-            <h3>Find Donors</h3>
-            <form id="searchForm" class="search" onsubmit="return false">
-              <label for="qGroup" style="font-weight:600;margin-bottom:.2rem;">Blood Group *</label>
-              <select id="qGroup" required>
-                <option value="">Select blood group</option>
-                <option>A+</option><option>A-</option><option>B+</option><option>B-</option>
-                <option>AB+</option><option>AB-</option><option>O+</option><option>O-</option>
-              </select>
-              <label for="qArea" style="font-weight:600;margin-bottom:.2rem;">Area (Optional)</label>
-              <input id="qArea" type="text" placeholder="e.g. Downtown, Brooklyn" />
-              <button id="doSearch" class="primary" type="button">Search Donors</button>
-            </form>
-            <div id="searchMsg"></div>
-          </div>
-        </div>
-      </section>
-      <section class="results-section">
-        <h3>Results</h3>
-        <div id="results" class="results">
-          <!-- donors here -->
-        </div>
-      </section>
-      <footer>
-        <div class="footer-main">
-          <div class="footer-col">
-            <div class="footer-brand">
-              <span class="footer-brand-icon">❤️</span>
-              <span class="footer-brand-title">Blood Donation</span>
-              <span style="color:#b0b6c3;margin-left:.5rem;">Community</span>
-            </div>
-            <div class="footer-brand-desc">
-              Connecting blood donors with those in need. Together, we save lives one donation at a time.
-            </div>
-          </div>
-          <div class="footer-col">
-            <h4>Quick Links</h4>
-            <ul>
-              <li><a href="#">Find Donors</a></li>
-              <li><a href="#">Become a Donor</a></li>
-              <li><a href="#">Blood Drive Events</a></li>
-              <li><a href="#">About Us</a></li>
-            </ul>
-          </div>
-          <div class="footer-col">
-            <h4>Support</h4>
-            <ul>
-              <li><a href="#">Help Center</a></li>
-              <li><a href="#">Safety Guidelines</a></li>
-              <li><a href="#">Privacy Policy</a></li>
-              <li><a href="#">Terms of Service</a></li>
-            </ul>
-          </div>
-          <div class="footer-col">
-            <h4>Contact Us</h4>
-            <div class="footer-contact"><span class="icon">📞</span>+1 (555) 123-4567</div>
-            <div class="footer-contact"><span class="icon">✉️</span>help@blooddonation.org</div>
-            <div class="footer-contact"><span class="icon">📍</span>New York, NY</div>
-          </div>
-        </div>
-        <div class="footer-bottom">© 2025 Blood Donation Community. All rights reserved.</div>
-      </footer>
-    </main>
-      messagingSenderId: "236781015251",
-
-
-      appId: "1:236781015251:web:b6458c618cb56379a54426",
-
-
-      measurementId: "G-M38VV9TMPW"
-
-
-    };
-
-
-
-
-
-    const app = initializeApp(firebaseConfig);
-
-
-    const auth = getAuth(app);
-
-
-    const db = getFirestore(app);
-
-
-
-
-
-    // update nav link depending on auth state
-
-
-    const authLink = document.getElementById('authLink');
-
-
-    onAuthStateChanged(auth, user => {
-
-
-      if (user) {
-
-
-        authLink.textContent = 'Dashboard';
-
-
-        authLink.href = 'dashboard.html';
-
-
-      } else {
-
-
-        authLink.textContent = 'Login';
-
-
-        authLink.href = 'login.html';
-
-
-      }
-
-
-    });
-
-
-
-
-
-    // search
-
-
-    const doSearch = document.getElementById('doSearch');
-
-
-    const resultsEl = document.getElementById('results');
-
-
-    const searchMsg = document.getElementById('searchMsg');
-
-
-
-
-
-    doSearch.addEventListener('click', async () => {
-
-
-      const group = document.getElementById('qGroup').value;
-
-
-      const area = document.getElementById('qArea').value.trim().toLowerCase();
-
-
-      if (!group) { searchMsg.textContent = 'Choose a blood group.'; return; }
-
-
-      searchMsg.textContent = 'Searching...';
-
-
-      resultsEl.innerHTML = '';
-
-
-      try {
-
-
-        const snap = await getDocs(collection(db, 'donors'));
-
-
-        const donors = [];
-
-
-        snap.forEach(d => {
-
-
-          const data = d.data();
-
-
-          if ((data.bloodGroup || '').toLowerCase() === group.toLowerCase() && data.available === true) {
-
-
-            if (!area || (data.address||'').toLowerCase().includes(area)) donors.push({ id: d.id, ...data });
-
-
-          }
-
-
-        });
-
-
-        if (!donors.length) {
-
-
-          searchMsg.textContent = 'No available donors found.';
-
-
-          return;
-
-
-        }
-
-
-        searchMsg.textContent = donors.length + ' available donor(s) found.';
-
-
-        donors.forEach(d => {
-
-
-          const card = document.createElement('div');
-
-
-          card.className = 'donor card';
-
-
-          card.innerHTML = `<h4>${escapeHtml(d.name||'')}</h4><div class="meta">${escapeHtml(d.email||'')} • ${escapeHtml(d.phone||'')}</div><div class="meta">${escapeHtml(d.address||'')} • ${escapeHtml(d.bloodGroup||'')}</div>`;
-
-
-          if (d.lastDonation) card.innerHTML += `<div class="meta">Last donation: ${new Date(d.lastDonation).toLocaleDateString()}</div>`;
-
-
-          const btn = document.createElement('button');
-
-
-          btn.textContent = 'Request Donation';
-
-
-          btn.onclick = async () => {
-
-
-            const user = auth.currentUser;
-
-
-            if (!user) return alert('Please login to request a donation.');
-
-
-            // create a request doc
-
-
-            try {
-
-
-              await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js').then(mod => {
-
-
-                const { getFirestore, collection, addDoc } = mod;
-
-
-                const db2 = getFirestore(app);
-
-
-                return addDoc(collection(db2, 'requests'), { donorId: d.id, requesterUid: user.uid, status: 'pending', createdAt: new Date().toISOString() });
-
-
-              });
-
-
-              alert('Request sent. Donor will be notified (if enabled).');
-
-
-            } catch (err) { alert('Failed to send request: ' + err.message); }
-
-
-          };
-
-
-          card.appendChild(btn);
-
-
-          resultsEl.appendChild(card);
-
-
-        });
-
-
-      } catch (err) {
-
-
-        searchMsg.textContent = 'Search failed: ' + err.message;
-
-
-      }
-
-
-    });
-
-
-
-
-
-    function escapeHtml(s){ return String(s||'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"})[c]); }
-
-
-
-
-
-  </script>
-
-
-</body>
-
-
 </html>
